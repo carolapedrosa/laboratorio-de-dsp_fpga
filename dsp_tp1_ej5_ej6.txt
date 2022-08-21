@@ -1,0 +1,23 @@
+Ej 5
+
+a) sr = $320
+Como scaling mode = 0, para la parte entera se toman los bits 55 a 47 inclusive. Como a = $00800..., el 1 del $8 entra en la parte entera. Y como no todos los bits de la parte entera son iguales, se prende el bit E, por lo que sr pasa a $320.
+
+b) sr = $700
+Si sr comienza en $700, entonces scaling mode = 1, por lo que el 1 del $8 no queda incluido en la parte entera (se toman los bits 55 a 48 inclusive). Por lo tanto, el bit E no se prende y sr queda en $700.
+
+
+Ej 6
+
+Asumo que sr empieza en $300, o sea que scaling mode = 0, o sea que el bit U significa !(bit[46] ^ bit[47]).
+
+Valores finales:
+    a = 00c00000000000
+    r0 = fffd
+
+Paso 1: CCR = $10 ---> Se prende el bit de "unnormalized" porque a = $00c0000...
+Paso 2: CCR = $10, a = $018000..., r0 = $ffff.
+Paso 3: CCR = $10, a = $030000..., r0 = $fffe.
+Paso 4: CCR = $00 ---> Se apaga el bit de "unnormalized", a = $060000..., r0 = $fffd
+
+Luego se suma $06000... de x0 con a, por lo que a termina en $00c000... y r0 queda en el valor de $fffd.
