@@ -38,20 +38,21 @@ if __name__ == '__main__':
         step    = Signal()
         duty    = Signal(8)
         freqdiv = Signal()
-        output   = Signal()
         m.submodules.pwm = Instance(
             'PWM',
 
             p_duty_bits = 8,
             p_freq      = int(100e3),
             p_sys_freq  = int(100e6),
+            p_phases    = len(leds),
 
             i_clk       = ClockSignal('sync'),
             i_rst_n     = ~ResetSignal('sync'),
             i_duty      = duty,
             i_en        = freqdiv,
 
-            o_pwm       = output,
+            o_pwm       = leds,
+            o_pwm_n     = Signal(len(leds)),
         )
         m.submodules.ramp = Instance(
             'RampGenerator',
@@ -77,11 +78,9 @@ if __name__ == '__main__':
             o_re       = step,
         )
 
-        sync += leds.eq(Repl(output, len(leds)))
-
         from glob import glob
 
-        sources = glob(os.path.join('dsp_fpga', 'TP1', 'vhdl', '*.vhd'))
+        sources = glob(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'vhdl', '*.vhd'))
 
         for file in sources:
             with open(file, 'r') as f:
