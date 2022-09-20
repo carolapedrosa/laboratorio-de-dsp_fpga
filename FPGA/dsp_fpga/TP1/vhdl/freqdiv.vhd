@@ -17,37 +17,28 @@ entity Freqdiv is
 end;
 
 architecture rtl of Freqdiv is
-    signal counter : std_logic_vector(integer(ceil(log2(real(div_half)))) - 1 downto 0) := (others => '0');
-
-    signal tmp_o, tmp_re : std_logic := '0';
-
-    function i2sv(
-        i      : in integer;
-        length : in integer := counter'length
-    ) return std_logic_vector is
-        begin
-            return std_logic_vector(to_unsigned(i, length));
-    end;
+    signal counter       : integer range 0 to div_half - 1 :=  0 ;
+    signal tmp_o, tmp_re : std_logic                       := '0';
 
 begin
 
     process(clk)
       begin
         if rising_edge(clk) then
-            if (rst_n = '1') and (counter < i2sv(div_half - 1)) then
-                counter <= counter + i2sv(1);
+            if rst_n = '1' then
+                if counter < div_half - 1 then
+                    counter <= counter + 1;
+                    tmp_re  <= '0';
+                else
+                    counter <= 0;
+                    tmp_o   <= not tmp_o;
+                    tmp_re  <= '1';
+                end if;
             else
-                counter <= i2sv(0);
-            end if;
-
-            if (rst_n = '1') and (counter = i2sv(0)) then
-                tmp_o   <= not tmp_o;
-                tmp_re  <= '1';
-            else
+                counter <=  0 ;
                 tmp_o   <= '0';
                 tmp_re  <= '0';
             end if;
-
         end if;
     end process;
 
