@@ -5,7 +5,7 @@ import random
 import bisect
 from PyQt5.QtCore import Qt
 from skimage.transform import downscale_local_mean
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 class Filter(QWidget):
     def __init__(self, name, *args, **kwargs):
@@ -426,38 +426,37 @@ class BitPlaneSlicing(Filter):
             print(e)
             return img
 
-# class BrightnessEnhancer(Filter):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__('Brightness Enhancer', *args, **kwargs)
+class BrightnessEnhancer(Filter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Brightness Enhancer', *args, **kwargs)
 
-#         self.main_layout = QVBoxLayout(self)
-#         self.factor      = QDoubleSpinBox(self)
+        self.main_layout = QVBoxLayout(self)
+        self.factor      = QDoubleSpinBox(self)
 
-#         self.factor.setMinimum(0)
-#         self.factor.setMaximum(1)
-#         self.factor.setSingleStep(0.05)
+        self.factor.setMinimum(0)
+        self.factor.setMaximum(1)
+        self.factor.setSingleStep(0.05)
 
-#         self.main_layout.addWidget(self.factor, alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.factor, alignment = Qt.AlignCenter)
 
-#     def apply(self, img):
-#         try:
-#             if len(img.shape) not in [2, 3]:
-#                 print("Invalid image shape")
-#                 return img
+    def apply(self, img):
+        try:
+            if len(img.shape) not in [2, 3]:
+                print("Invalid image shape")
+                return img
 
-#             if len(img.shape) == 2:
-#                 img = img.reshape(*img.shape, 1)
+            if len(img.shape) == 2:
+                res = img.reshape(*img.shape, 1)
 
-#             res = []
+            elif img.shape[2] > 3:
+                res = img[:, :, :3]
 
-#             for dim in range(img.shape[2]):
-#                 _img = img[:, :, dim]
-#                 _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(np.uint8)
+            res = ((res - res.min()) / abs(res - res.min()).max() * 255).astype(np.uint8)
+            return ImageEnhance.Brightness(Image.fromarray(res)).enhance(self.factor.value())
 
-#                 res.append(encancher.enhance(factor))
-#                 def brightness_enhancer(im, factor= 0.5):
-#   im_output = enhancer.enhance(factor)
-#   return im_output
+        except Exception as e:
+            print(e)
+            return img
 
 class ColorLimitation(Filter):
     def __init__(self, *args, **kwargs):

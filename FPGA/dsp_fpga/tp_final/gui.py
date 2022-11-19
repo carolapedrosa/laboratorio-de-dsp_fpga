@@ -52,17 +52,18 @@ class Gui(QWidget):
         self.filter_options      = QComboBox(self.filter_frame)
         self.iconfig_layout      = QHBoxLayout(self.filter_frame)
         self.filters             = [
-            Identity        (self.filter_frame),
-            GaussianBlur    (self.filter_frame),
-            Negative        (self.filter_frame),
-            SaltnPepper     (self.filter_frame),
-            Median          (self.filter_frame),
-            Histogram       (self.filter_frame),
-            ImAdjust        (self.filter_frame),
-            BitPlaneSlicing (self.filter_frame),
-            ColorLimitation (self.filter_frame),
-            Downscaler      (self.filter_frame),
-            Logarithmic     (self.filter_frame),
+            Identity            (self.filter_frame),
+            GaussianBlur        (self.filter_frame),
+            Negative            (self.filter_frame),
+            SaltnPepper         (self.filter_frame),
+            Median              (self.filter_frame),
+            Histogram           (self.filter_frame),
+            ImAdjust            (self.filter_frame),
+            BitPlaneSlicing     (self.filter_frame),
+            BrightnessEnhancer  (self.filter_frame),
+            ColorLimitation     (self.filter_frame),
+            Downscaler          (self.filter_frame),
+            Logarithmic         (self.filter_frame),
         ]
 
     def setup_widgets(self):
