@@ -122,6 +122,7 @@ class KernelFilter(Elaboratable):
                         high        .eq(0),
                         addr        .eq(addr + 1),
                         kwp.en      .eq(1),
+                        kwp.addr.eq(self.kernel_size**2 - addr - 1),
                         kwp.data    .eq(0),
                     ]
                     iter_colrow(kcol, krow, self.kernel_size)

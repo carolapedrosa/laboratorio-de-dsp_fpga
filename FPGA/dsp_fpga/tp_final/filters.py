@@ -16,26 +16,24 @@ class Filter(QWidget):
     def apply(self, img):
         return img
 
+    def __le__(self, other):
+        return self.name <= other.name
+
+    def __lt__(self, other):
+        return self.name < other.name
+
+    def __ge__(self, other):
+        return self.name >= other.name
+
+    def __gt__(self, other):
+        return self.name > other.name
+
 class HWFilter(Filter):
+    MAX_KERNEL_SIZE = 11
+
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
         self.hw   = True
-
-    def get_kernel(self):
-        return np.array([1])
-
-class Identity(Filter):
-    def __init__(self, *args, **kwargs):
-        super().__init__('Identity', *args, **kwargs)
-
-    def apply(self, img):
-        return img
-
-class GaussianBlur(HWFilter):
-    MAX_KERNEL_SIZE = 11
-
-    def __init__(self, *args, **kwargs):
-        super().__init__('Gaussian blur', *args, **kwargs)
 
         self.main_layout = QVBoxLayout(self)
         self.label       = QLabel(self, text = 'Kernel size')
@@ -67,16 +65,91 @@ class GaussianBlur(HWFilter):
                 self.last = new
 
     def get_kernel(self):
-        # Armar el kernel en función de int(self.spinbox.value())
-        return np.array([
-            [1, 4, 7, 10, 7, 4, 1],
-            [4, 12, 26, 33, 26, 12, 4],
-            [7, 26, 55, 71, 55, 26, 7],
-            [10, 33, 71, 91, 71, 33, 10],
-            [7, 26, 55, 71, 55, 26, 7],
-            [4, 12, 26, 33, 26, 12, 4],
-            [1, 4, 7, 10, 7, 4, 1],
-        ])
+        return np.array([1])
+
+class Identity(Filter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Identity', *args, **kwargs)
+
+    def apply(self, img):
+        return img
+
+class GaussianBlur(HWFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Gaussian blur', *args, **kwargs)
+        self.flabel       = QLabel(self, text = 'Sigma')
+        self.fspinbox     = QDoubleSpinBox(self)
+
+        self.fspinbox.setMinimum(0.1)
+        self.fspinbox.setMaximum(10)
+        self.fspinbox.setSingleStep(0.1)
+
+        self.fspinbox.setValue(1)
+
+        self.main_layout.addWidget(self.flabel  , alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.fspinbox, alignment = Qt.AlignCenter)
+
+    @staticmethod
+    def gaussian_filter(k, sigma):
+        def get_axis(x, y):
+            return np.repeat([np.arange(x)], y, axis = 0).astype(float)
+
+        x = get_axis(k, k)
+        center = (k - 1)//2
+        D = ((x.T - center)**2 + (x - center)**2)
+        return 1/(2 * np.pi * sigma**2) * np.exp(-D/(2 * sigma**2))
+
+    def get_kernel(self):
+        k = self.gaussian_filter(int(self.spinbox.value()), self.fspinbox.value())
+        return (k / abs(k.min())).round().astype(np.uint8)
+
+class BoxBlur(HWFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Box blur', *args, **kwargs)
+
+    def get_kernel(self):
+        k = int(self.spinbox.value())
+        return np.ones((k, k), dtype = np.uint8)
+
+class RidgeDetection(HWFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Ridge Detection', *args, **kwargs)
+        self.flabel       = QLabel(self, text = 'Center')
+        self.fspinbox     = QDoubleSpinBox(self)
+
+        self.fspinbox.setMinimum(0)
+        self.fspinbox.setMaximum(255)
+        self.fspinbox.setSingleStep(1)
+
+        self.main_layout.addWidget(self.flabel  , alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.fspinbox, alignment = Qt.AlignCenter)
+
+    def get_kernel(self):
+        k = int(self.spinbox.value())
+        res = np.full((k, k), -1)
+        res[k//2, k//2] = int(self.fspinbox.value())
+        return res
+
+class Sharpen(HWFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Sharpen', *args, **kwargs)
+        self.flabel       = QLabel(self, text = 'Center')
+        self.fspinbox     = QDoubleSpinBox(self)
+
+        self.fspinbox.setMinimum(0)
+        self.fspinbox.setMaximum(255)
+        self.fspinbox.setSingleStep(1)
+
+        self.main_layout.addWidget(self.flabel  , alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.fspinbox, alignment = Qt.AlignCenter)
+
+    def get_kernel(self):
+        k = int(self.spinbox.value())
+
+        res = np.full((k, k), -1)
+        res[0, 0] = res[k-1, 0] = res[0, k-1] = res[k-1, k-1] = 0
+        res[k//2, k//2] = int(self.fspinbox.value())
+        return res
 
 class Negative(Filter):
     def __init__(self, *args, **kwargs):
@@ -112,52 +185,46 @@ class SaltnPepper(Filter):
         if len(img.shape) == 2:
             img = img.reshape(*img.shape, 1)
 
-        res = np.zeros(img.shape, dtype = np.uint8)
+        res = []
+        row , col = img.shape[:2]
+
+        tot = row * col
+        number_of_pixels = random.randint(int(self.MIN_CHANGE*tot), int(self.MAX_CHANGE*tot))
+
+        windices = [
+            (random.randint(0, row-1), random.randint(0, col-1)) for _ in range(number_of_pixels)
+        ]
+        bindices = [
+            (random.randint(0, row-1), random.randint(0, col-1)) for _ in range(number_of_pixels)
+        ]
+
         for dim in range(img.shape[2]):
             _img = img[:, :, dim]
+            if not abs(_img - _img.min()).max():
+                continue
 
             _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(np.uint8)
 
-            # Getting the dimensions of the image
-            row , col = _img.shape
+            if dim >= 3:
+                res.append(_img.reshape(*_img.shape, 1))
+                continue
 
-            # Randomly pick some pixels in the
-            # image for coloring them white
-            tot = len(_img.reshape(-1))
-            number_of_pixels = random.randint(int(self.MIN_CHANGE*tot), int(self.MAX_CHANGE*tot))
-            for i in range(number_of_pixels):
-
-                # Pick a random y coordinate
-                y_coord=random.randint(0, row - 1)
-
-                # Pick a random x coordinate
-                x_coord=random.randint(0, col - 1)
-
+            for y_coord, x_coord in windices:
                 # Color that pixel to white
                 _img[y_coord][x_coord] = 255
 
-            # Randomly pick some pixels in
-            # the image for coloring them black
-            number_of_pixels = random.randint(int(self.MIN_CHANGE*tot), int(self.MAX_CHANGE*tot))
-            for i in range(number_of_pixels):
-
-                # Pick a random y coordinate
-                y_coord=random.randint(0, row - 1)
-
-                # Pick a random x coordinate
-                x_coord=random.randint(0, col - 1)
-
+            for y_coord, x_coord in bindices:
                 # Color that pixel to black
                 _img[y_coord][x_coord] = 0
 
-            res[:, :, dim] += _img
+            res.append(_img)
+            res[-1] = res[-1].reshape(*res[-1].shape, 1)
 
 
+        res = np.concatenate(tuple(res), axis = -1).astype(float)
         if res.shape[2] == 1:
             res = res.reshape(*res.shape[:2])
     
-        res = res.astype(float)
-
         return (res - res.min()) / abs(res - res.min()).max()
 
 class Median(Filter):
@@ -221,6 +288,8 @@ class Histogram(Filter):
 
             for dim in range(img.shape[2]):
                 _img = img[:, :, dim]
+                if not abs(_img - _img.min()).max():
+                    continue
                 _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(np.uint8)
 
                 res.append(np.hstack((_img, cv2.equalizeHist(_img))))
@@ -288,8 +357,8 @@ class ImAdjust(Filter):
         self.tollayout   = QVBoxLayout()
         self.tol_label   = QLabel(self, text = 'Tol')
         self.tol         =  QDoubleSpinBox(self) 
-        self.tol.setMinimum(1)
-        self.tol.setMaximum(255)
+        self.tol.setMinimum(0)
+        self.tol.setMaximum(100)
         self.tol.setSingleStep(1)
         self.tollayout.addWidget(self.tol_label, alignment = Qt.AlignCenter)
         self.tollayout.addWidget(self.tol, alignment = Qt.AlignCenter)
@@ -304,6 +373,8 @@ class ImAdjust(Filter):
         self.vout_min.valueChanged.connect(self.adapt_max_vout)
         self.vout_max.valueChanged.connect(self.adapt_min_vout)
 
+        self.tol.valueChanged.connect(self.toggle_vin)
+
     def adapt_min_vin(self, new_max):
         self.vin_min.setMaximum(max(0, self.vin_max.value() - 1))
 
@@ -315,6 +386,18 @@ class ImAdjust(Filter):
 
     def adapt_max_vout(self, new_min):
         self.vout_max.setMinimum(min(self.vout_min.value() + 1, 255))
+
+    def toggle_vin(self, new_value):
+        if new_value > 0:
+            self.vin_min_label.hide()
+            self.vin_min.hide()
+            self.vin_max_label.hide()
+            self.vin_max.hide()
+        else:
+            self.vin_min_label.show()
+            self.vin_min.show()
+            self.vin_max_label.show()
+            self.vin_max.show()
 
     def apply(self, img):
         # def imadjust(src, tol=1, vin=[0,255], vout=(0,255)):
@@ -332,13 +415,18 @@ class ImAdjust(Filter):
             img = img.reshape(*img.shape, 1)
 
         res = np.zeros(img.shape, dtype = np.uint8)
-        vin = [int(self.vin_min.value()), int(self.vin_max.value())]
-        vout = [int(self.vout_min.value()), int(self.vout_max.value())]
-        tol = int(self.tol.value())
+
+        res = []
 
         for dim in range(img.shape[2]):
             _img = img[:, :, dim]
+            if not abs(_img - _img.min()).max():
+                continue
             _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(np.uint8)
+
+            vin = [int(self.vin_min.value()), int(self.vin_max.value())]
+            vout = [int(self.vout_min.value()), int(self.vout_max.value())]
+            tol = int(self.tol.value())
 
             tol = max(0, min(100, tol))
 
@@ -364,14 +452,15 @@ class ImAdjust(Filter):
             vs[_img<vin[0]]=0
             vd = vs*scale+0.5 + vout[0]
             vd[vd>vout[1]] = vout[1]
-            dst = vd
 
-            res[:, :, dim] += _img
+            res.append(vd)
+            res[-1] = res[-1].reshape(*res[-1].shape, 1)
+
+        res = np.concatenate(tuple(res), axis = -1).astype(float)
 
         if res.shape[2] == 1:
             res = res.reshape(*res.shape[:2])
-    
-        res = res.astype(float)
+
         return (res - res.min()) / abs(res - res.min()).max()
 
 class BitPlaneSlicing(Filter):
@@ -392,6 +481,8 @@ class BitPlaneSlicing(Filter):
 
             for dim in range(img.shape[2]):
                 _img = img[:, :, dim]
+                if not abs(_img - _img.min()).max():
+                    continue
                 _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(np.uint8)
 
                 lst = []
@@ -448,8 +539,8 @@ class BrightnessEnhancer(Filter):
             if len(img.shape) == 2:
                 res = img.reshape(*img.shape, 1)
 
-            elif img.shape[2] > 3:
-                res = img[:, :, :3]
+            else:
+                res = img
 
             res = ((res - res.min()) / abs(res - res.min()).max() * 255).astype(np.uint8)
             return ImageEnhance.Brightness(Image.fromarray(res)).enhance(self.factor.value())
@@ -481,9 +572,9 @@ class ColorLimitation(Filter):
 
             if len(img.shape) == 2:
                 res = img.reshape(*img.shape, 1)
-            
-            elif img.shape[2] > 3:
-                res = img[:, :, :3]
+
+            else:
+                res = img
 
             res = ((res - res.min()) / abs(res - res.min()).max() * 255).astype(np.uint8)
             
@@ -567,4 +658,3 @@ class Logarithmic(Filter):
         except Exception as e:
             print(e)
             return img
-            

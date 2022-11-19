@@ -6,6 +6,7 @@ from dsp_fpga.tp_final.hdl.fifo import Fifo
 from dsp_fpga.tp_final.hdl.uart import Uart
 from dsp_fpga.tp_final.hdl.adapter import Adapter
 from dsp_fpga.tp_final.hdl.kernel_filter import KernelFilter
+from math import ceil, log2
 
 if __name__ == '__main__':
 
@@ -40,10 +41,10 @@ if __name__ == '__main__':
     platform.add_clock_constraint(clk, 50e6)
 
     m.submodules.kernel = kernel = KernelFilter(
-        h           = 128,
-        w           = 128,
+        h           = 200,
+        w           = 200,
         kernel_size = 11,
-        timeout     = 536870912,
+        timeout     = int(2**ceil(log2(clkfreq * 5))),
         domain      = 'sync'
     )
 

@@ -3,17 +3,20 @@ from dsp_fpga.tp_final.uart import Uart
 from dsp_fpga.tp_final.file import open_file, save_file
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, QFrame
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, QFrame, QProgressBar
 from dsp_fpga.tp_final.filters import *
 
 import numpy as np
 from matplotlib.pyplot import imsave
 
+from threading import Thread
+from time import sleep
+
 class Gui(QWidget):
 
-    KERNEL_SIZE    = 7
-    MAX_IMG_WIDTH  = 256
-    MAX_IMG_HEIGHT = 256
+    KERNEL_SIZE    = 11
+    MAX_IMG_WIDTH  = 200
+    MAX_IMG_HEIGHT = 200
     RESPONSE_BYTES = 3
 
     def __init__(self, port, baudrate, timeout, *args, **kwargs):
@@ -29,9 +32,19 @@ class Gui(QWidget):
         self.setup_widgets()
         self.connect_callbacks()
 
+        self.alive = True
+        self.pvalue = 0
+        self.pshow = False
+        self.t = Thread(target = self.progress_updater)
+        self.t.start()
+
     def open_serial(self):
         try:
+            if hasattr(self, 'uart') and self.uart is not None:
+                self.uart.close()
+
             self.uart = Uart(self.port, self.baudrate, self.timeout)
+
         except Exception as e:
             print(e)
             self.uart = None
@@ -50,7 +63,9 @@ class Gui(QWidget):
         self.save_filtered       = QPushButton('Save filtered image', self)
         self.filter_frame        = QFrame(self)
         self.filter_options      = QComboBox(self.filter_frame)
-        self.iconfig_layout      = QHBoxLayout(self.filter_frame)
+        self.info_layout         = QVBoxLayout(self.filter_frame)
+        self.iconfig_layout      = QHBoxLayout()
+        self.progress            = QProgressBar(self)
         self.filters             = [
             Identity            (self.filter_frame),
             GaussianBlur        (self.filter_frame),
@@ -64,6 +79,9 @@ class Gui(QWidget):
             ColorLimitation     (self.filter_frame),
             Downscaler          (self.filter_frame),
             Logarithmic         (self.filter_frame),
+            RidgeDetection      (self.filter_frame),
+            Sharpen             (self.filter_frame),
+            BoxBlur             (self.filter_frame),
         ]
 
     def setup_widgets(self):
@@ -76,22 +94,34 @@ class Gui(QWidget):
         self.main_layout    .addLayout(self.plot_layout)
         self.main_layout    .addLayout(self.config_layout)
 
-        for filter in self.filters:
+        first = 1
+        for filter in sorted(self.filters):
+            if first:
+                self.pshow = filter.hw
+                filter.show()
+            else:
+                filter.hide()
+
+            first = 0
             self.iconfig_layout.addWidget(filter, alignment = Qt.AlignCenter)
             self.filter_options.addItem(filter.name)
             filter.hide()
 
         self.iconfig_layout .addWidget(self.apply_filter_button, alignment = Qt.AlignCenter)
         self.iconfig_layout .addWidget(self.save_filtered      , alignment = Qt.AlignCenter)
+        self.info_layout    .addLayout(self.iconfig_layout)
+        self.info_layout    .addWidget(self.progress)
 
-        self.filters[0].show()
-        self.filter_frame.setLineWidth(2)
-        self.filter_frame.setFrameStyle(1)
+        self.progress       .setMinimum(0)
+        self.progress       .setMaximum(100)
+        self.filters[0]     .show()
+        self.filter_frame   .setLineWidth(2)
+        self.filter_frame   .setFrameStyle(1)
 
     def connect_callbacks(self):
         self.open_file_button   .clicked.connect(self.open_image)
         self.clear_fig_button   .clicked.connect(self.canvas.clear)
-        self.filter_options     .currentIndexChanged.connect(self.update_config)
+        self.filter_options     .currentTextChanged.connect(self.updated)
         self.apply_filter_button.clicked.connect(self.apply_filter)
         self.save_filtered      .clicked.connect(self.save_filtered_callback)
 
@@ -103,44 +133,69 @@ class Gui(QWidget):
             self.canvas.plot(0, filename, interpolation='nearest', aspect='auto')
 
     def keyPressEvent(self, a0):
-        if a0.key() == Qt.Key.Key_Escape: self.close()
+        if a0.key() == Qt.Key.Key_Escape:
+            self.alive = False
+            self.t.join()
+            self.close()
         return super().keyPressEvent(a0)
 
-    def update_config(self):
+    def progress_updater(self):
+        while self.alive:
+            if self.pshow:
+                self.progress.show()
+            else:
+                self.progress.hide()
+            sleep(.1)
+            self.progress.setValue(self.pvalue)
+
+    def updated(self, name):
         for filter in self.filters:
-            if filter.name == self.filter_options.currentText():
+            if name == filter.name:
+                self.currfilt = filter
                 filter.show()
             else:
                 filter.hide()
 
+        self.pvalue = 0
+        self.pshow = self.currfilt.hw
+
     def apply_filter(self):
         img = self.canvas.images[0]
         if img is not None:
+            img = img.copy()
             for filter in self.filters:
                 if filter.name == self.filter_options.currentText():
                     break
 
+            if len(img.shape) not in [2, 3]:
+                print("Wrong image format")
+                return
+
+            elif len(img.shape) == 2:
+                # img = img[:, :, :3]
+            # else:
+                img = img.reshape(*img.shape, 1)
+
+            self.pvalue = 0
+
             if filter.hw:
-                if len(img.shape) > 3:
-                    print("Wrong image format")
-
-                elif len(img.shape) == 3:
-                    if img.shape[2] <= 3:
-                        res = np.zeros(img.shape)
-                    else:
-                        res = np.zeros(img.shape[:2] + (3,))
-                        img = img[:, :, :3]
-                else:
-                    img = img.reshape(*img.shape, 1)
-                    res = np.zeros(img.shape + (1,))
-
+                res = []
                 img = (self.normalize(img) * 255).astype(np.uint8)
+                kernel = filter.get_kernel()
+
+                print('Using kernel:')
+                print(kernel)
 
                 for dim in range(img.shape[2]):
-                    r = self.hw_filter(img[:, :, dim], filter)
+                    r = self.hw_filter(img[:, :, dim], kernel)
+                    self.pvalue = int((dim + 1) / img.shape[2] * 100)
                     if r is None:
                         return
-                    res[:, :, dim] += r
+
+                    res.append(r)
+                    res[-1] = res[-1].reshape(*res[-1].shape, 1)
+
+                res = np.concatenate(tuple(res), axis = -1).astype(float)
 
                 if res.shape[2] == 1:
                     res = res.reshape(res.shape[:2])
@@ -176,9 +231,8 @@ class Gui(QWidget):
     def normalize(img):
         return (img - img.min()) / abs(img - img.min()).max()
     
-    def hw_filter(self, img, filter):
-        if self.uart is None:
-            self.open_serial()
+    def hw_filter(self, img, kernel):
+        self.open_serial()
 
         if self.uart is None:
             return None
@@ -188,7 +242,13 @@ class Gui(QWidget):
             return
 
         try:
-            kernel = filter.get_kernel()
+            if (
+                len(kernel.shape) != 2 or
+                kernel.shape[0] != kernel.shape[1] or
+                kernel.shape[0] > self.KERNEL_SIZE
+            ):
+                print("Wrong kernel format")
+                return
             self.send_data([kernel.shape[0]], 1)
             self.send_data(kernel.reshape(-1), 2)
             self.send_data(img.shape, 2)
