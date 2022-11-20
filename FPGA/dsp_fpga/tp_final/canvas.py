@@ -44,12 +44,12 @@ class Canvas(QWidget):
         if isinstance(image, str):
             img = imread(image)
         else:
-            img = np.asarray(image)
+            img = image
 
         if 'cmap' in kwargs:
             cmap = kwargs.pop('cmap')
         else:
-            if len(img.shape) < 3:
+            if len(np.asarray(img).shape) < 3:
                 cmap = 'gray'
             else:
                 cmap = None

@@ -260,14 +260,10 @@ class Gui(QWidget):
             ):
                 print("Wrong kernel format")
                 return
-            if(self.send_data([kernel.shape[0]], 1)) != 0:
-                return
-            if (self.send_data(kernel.reshape(-1), 2)) != 0:
-                return
-            if (self.send_data(img.shape, 2)) != 0:
-                return
-            if (self.send_data(img.reshape(-1), 1) != 0):
-                return
+            self.send_data([kernel.shape[0]], 1)
+            self.send_data(kernel.reshape(-1), 2)
+            self.send_data(img.shape, 2)
+            self.send_data(img.reshape(-1), 1)
         except IOError:
             self.uart = None
             print("Serial port disconnected")
