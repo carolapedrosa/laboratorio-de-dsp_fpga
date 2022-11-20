@@ -4,7 +4,9 @@
 ## Para correr tp_final:
 
 
-- cd FPGA/dsp_fpga/tp_final/
+- cd FPGA/
+- pip3 install -e .
+- cd dsp_fpga/tp_final/
 - pip3 install -r requirements.txt
 - python3 main.py
 
