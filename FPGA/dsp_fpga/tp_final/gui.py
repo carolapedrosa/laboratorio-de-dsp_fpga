@@ -77,13 +77,16 @@ class Gui(QWidget):
             BitPlaneSlicing     (self.filter_frame),
             BrightnessEnhancer  (self.filter_frame),
             ColorLimitation     (self.filter_frame),
-            Downscaler          (self.filter_frame),
+            Downsampler         (self.filter_frame),
             Logarithmic         (self.filter_frame),
             RidgeDetection      (self.filter_frame),
             Sharpen             (self.filter_frame),
             BoxBlur             (self.filter_frame),
             RadonDirect         (self.filter_frame),
             RadonInverse        (self.filter_frame),
+            MotionBlur          (self.filter_frame),
+            Wiener              (self.filter_frame),
+            MotionBlurSw        (self.filter_frame),
         ]
 
     def setup_widgets(self):
@@ -173,14 +176,12 @@ class Gui(QWidget):
                 print("Wrong image format")
                 return
 
-            elif len(img.shape) == 2:
-                # img = img[:, :, :3]
-            # else:
-                img = img.reshape(*img.shape, 1)
-
             self.pvalue = 0
 
             if filter.hw:
+                if len(img.shape) == 2:
+                    img = img.reshape(*img.shape, 1)
+
                 res = []
                 img = (self.normalize(img) * 255).astype(np.uint8)
                 kernel = filter.get_kernel()
@@ -221,13 +222,21 @@ class Gui(QWidget):
 
         filename = save_file()
         if filename:
-            imsave(filename, self.canvas.images[1])
+            cmap = None
+            if len(self.canvas.images[1].shape) < 3:
+                cmap = 'gray'
+
+            imsave(filename, self.canvas.images[1], cmap = cmap)
 
     def send_data(self, values, n):
+        ret = 0
         for _v in values:
             v = int(_v)
             for i in range(n):
-                self.uart.send((v >> (i << 3)) & 0xFF)
+                ret = self.uart.send((v >> (i << 3)) & 0xFF)
+                if ret != 0:
+                    raise IOError("Failed to connect with serial device")
+        return ret
 
     @staticmethod
     def normalize(img):
@@ -251,10 +260,14 @@ class Gui(QWidget):
             ):
                 print("Wrong kernel format")
                 return
-            self.send_data([kernel.shape[0]], 1)
-            self.send_data(kernel.reshape(-1), 2)
-            self.send_data(img.shape, 2)
-            self.send_data(img.reshape(-1), 1)
+            if(self.send_data([kernel.shape[0]], 1)) != 0:
+                return
+            if (self.send_data(kernel.reshape(-1), 2)) != 0:
+                return
+            if (self.send_data(img.shape, 2)) != 0:
+                return
+            if (self.send_data(img.reshape(-1), 1) != 0):
+                return
         except IOError:
             self.uart = None
             print("Serial port disconnected")

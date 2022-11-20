@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
 from copy import deepcopy
+import numpy as np
 
 class Canvas(QWidget):
 
@@ -43,11 +44,19 @@ class Canvas(QWidget):
         if isinstance(image, str):
             img = imread(image)
         else:
-            img = image
+            img = np.asarray(image)
+
+        if 'cmap' in kwargs:
+            cmap = kwargs.pop('cmap')
+        else:
+            if len(img.shape) < 3:
+                cmap = 'gray'
+            else:
+                cmap = None
 
         for w in which:
             self.setup_ax(w, clear_title = False)
-            self.axes[w].imshow(img, *args, **kwargs)
+            self.axes[w].imshow(img, *args, cmap = cmap, **kwargs)
             self.images[w] = img
 
         self.fcanvas.draw()

@@ -5,8 +5,8 @@ class Uart:
     def __init__(self, port, baudrate, timeout):
         self.timeout  = timeout
         self.port     = port
-        self.badurate = baudrate
-        self.dev      = serial.Serial(port, baudrate, timeout = timeout)
+        self.baudrate = baudrate
+        self.open()
 
     def send(self, data):
         if isinstance(data, (bytes, tuple)):
@@ -20,7 +20,8 @@ class Uart:
 
         try:
             self.dev.write(bytes(data))
-        except serial.SerialException:
+        except:
+            print("Write operation failed")
             return -1
 
         return 0
@@ -34,29 +35,32 @@ class Uart:
 
         try:
             res = list(self.dev.read(n))
-        except serial.SerialException as e:
-            print(e)
+        except:
             res = []
 
         if len(res) != n:
-            print("Read operation timed out, possibly serial port is not correctly configured")
+            print("Read operation faied")
             return None
 
         return res
 
     def close(self):
         try:
-            self.dev.reset_input_buffer()
-            self.dev.reset_output_buffer()
-            self.dev.close()
-        except serial.PortNotOpenError:
+            if self.dev is not None:
+                self.dev.reset_input_buffer()
+                self.dev.reset_output_buffer()
+                self.dev.close()
+        except:
             pass
 
     def open(self):
-        if hasattr(self, 'dev'):
+        if hasattr(self, 'dev') and self.dev is not None:
             self.dev.open()
         else:
-            self.dev = serial.Serial(self.port, self.baudrate, timeout = self.timeout)
+            try:
+                self.dev = serial.Serial(self.port, self.baudrate, timeout = self.timeout)
+            except:
+                self.dev = None
 
     def __del__(self):
         self.close()

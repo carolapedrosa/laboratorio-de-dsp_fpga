@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt
 from skimage.transform import downscale_local_mean
 from PIL import Image, ImageEnhance
 from skimage.transform.radon_transform import radon, iradon
+from skimage import restoration, color
 
 class Filter(QWidget):
     def __init__(self, name, *args, **kwargs):
@@ -589,9 +590,9 @@ class ColorLimitation(Filter):
             print(e)
             return img
 
-class Downscaler(Filter):
+class Downsampler(Filter):
     def __init__(self, *args, **kwargs):
-        super().__init__('Downscaler', *args, **kwargs)
+        super().__init__('Downsampler', *args, **kwargs)
 
         self.main_layout = QVBoxLayout(self)
         self.factor      = QDoubleSpinBox(self)
@@ -807,3 +808,116 @@ class RadonInverse(Filter):
             res = res.reshape(*res.shape[:2])
 
         return (res - res.min()) / abs(res - res.min()).max()
+
+
+class MotionBlur(HWFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Motion blur', *args, **kwargs)
+
+    def get_kernel(self):
+        size = int(self.spinbox.value())
+
+        kernel = np.zeros((size, size), dtype = np.uint16)
+        kernel[size//2, : ] = np.ones(size)
+
+        return kernel
+
+class MotionBlurSw(Filter):
+    MAX_KERNEL_SIZE = 31
+
+    def __init__(self, *args, **kwargs):
+        super().__init__('Motion blur (sw)', *args, **kwargs)
+        self.main_layout = QVBoxLayout(self)
+        self.factor      = QDoubleSpinBox(self)
+        self.label       = QLabel(self, text = 'Kernel size')
+
+        self.factor.setMinimum(1)
+        self.factor.setMaximum(100)
+        self.factor.setSingleStep(1)
+
+        self.main_layout.addWidget(self.label, alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.factor, alignment = Qt.AlignCenter)
+        self.factor.valueChanged.connect(self.set_new)
+        self.last = 1
+
+    def set_new(self, new):
+        if new < self.last:
+            if not new%1:
+                self.last = max(1, new - 1)
+                self.factor.setValue(self.last)
+            else:
+                self.last = new
+        elif new > self.last:
+            if not new%1:
+                self.last = min(self.MAX_KERNEL_SIZE, new + 1)
+                self.factor.setValue(self.last)
+            else:
+                self.last = new
+
+    def apply(self, img):
+        size = int(self.factor.value())
+        kernel = np.zeros((size, size))
+        kernel[size//2, :] = 1
+        res = cv2.filter2D(img, -1, kernel).astype(float)
+        return (res - res.min()) / abs(res - res.min()).max()
+
+class Wiener(Filter):
+    MAX_KERNEL_SIZE = 31
+
+    def __init__(self, *args, **kwargs):
+        super().__init__('Wiener', *args, **kwargs)
+        self.main_layout = QVBoxLayout(self)
+        self.factor      = QDoubleSpinBox(self)
+        self.label       = QLabel(self, text = 'Kernel size')
+
+        self.factor.setMinimum(1)
+        self.factor.setMaximum(100)
+        self.factor.setSingleStep(1)
+
+        self.adjust      = QDoubleSpinBox(self)
+        self.a_label     = QLabel(self, text = 'Ajust factor')
+
+        self.adjust.setMinimum(0)
+        self.adjust.setMaximum(1000)
+        self.adjust.setSingleStep(0.1)
+
+        self.main_layout.addWidget(self.label, alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.factor, alignment = Qt.AlignCenter)
+
+        self.main_layout.addWidget(self.a_label, alignment = Qt.AlignCenter)
+        self.main_layout.addWidget(self.adjust, alignment = Qt.AlignCenter)
+
+        self.factor.valueChanged.connect(self.set_new)
+        self.last = 1
+
+    def set_new(self, new):
+        if new < self.last:
+            if not new%1:
+                self.last = max(1, new - 1)
+                self.factor.setValue(self.last)
+            else:
+                self.last = new
+        elif new > self.last:
+            if not new%1:
+                self.last = min(self.MAX_KERNEL_SIZE, new + 1)
+                self.factor.setValue(self.last)
+            else:
+                self.last = new
+
+    def apply(self, img):
+        try:
+            size = int(self.factor.value())
+            balance = self.adjust.value()
+
+            if len(img.shape) >= 3:
+                img = color.rgb2gray(img[:, :, :3])
+
+            kernel = np.zeros((size, size))
+            kernel[size//2, :] = 1
+            res = restoration.wiener(img, psf = kernel, balance = balance).astype(float)
+
+            return (res - res.min()) / abs(res - res.min()).max()
+
+        except Exception as e:
+            print(e)
+            return img
