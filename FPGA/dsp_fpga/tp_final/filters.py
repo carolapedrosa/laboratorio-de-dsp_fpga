@@ -6,6 +6,7 @@ import bisect
 from PyQt5.QtCore import Qt
 from skimage.transform import downscale_local_mean
 from PIL import Image, ImageEnhance
+from skimage.transform.radon_transform import radon, iradon
 
 class Filter(QWidget):
     def __init__(self, name, *args, **kwargs):
@@ -296,6 +297,8 @@ class Histogram(Filter):
                 res[-1] = res[-1].reshape(*res[-1].shape, 1)
 
             res = np.concatenate(tuple(res), axis = -1).astype(float)
+            if res.shape[2] == 1:
+                res = res.reshape(*res.shape[:2])
             return (res - res.min()) / abs(res - res.min()).max()
 
         except Exception as e:
@@ -511,6 +514,8 @@ class BitPlaneSlicing(Filter):
                 res[-1] = res[-1].reshape(*res[-1].shape, 1)
 
             res = np.concatenate(tuple(res), axis = -1).astype(float)
+            if res.shape[2] == 1:
+                res = res.reshape(*res.shape[:2])
             return (res - res.min()) / abs(res - res.min()).max()
 
         except Exception as e:
@@ -618,6 +623,8 @@ class Downscaler(Filter):
                 res[-1] = res[-1].reshape(*res[-1].shape, 1)
 
             res = np.concatenate(tuple(res), axis = -1).astype(float)
+            if res.shape[2] == 1:
+                res = res.reshape(*res.shape[:2])
             return (res - res.min()) / abs(res - res.min()).max()
 
         except Exception as e:
@@ -653,8 +660,150 @@ class Logarithmic(Filter):
                 res[-1] = res[-1].reshape(*res[-1].shape, 1)
 
             res = np.concatenate(tuple(res), axis = -1).astype(float)
+            if res.shape[2] == 1:
+                res = res.reshape(*res.shape[:2])
             return (res - res.min()) / abs(res - res.min()).max()
 
         except Exception as e:
             print(e)
             return img
+
+class RadonDirect(Filter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Radon direct', *args, **kwargs)
+
+        self.main_layout = QHBoxLayout(self)
+
+        self.min_angle     = QDoubleSpinBox(self)
+        self.min_angle.setMinimum(0)
+        self.min_angle.setMaximum(180)
+        self.min_angle.setSingleStep(0.1)
+        self.text_min_angle = QLabel(self, text = 'Min angle')
+        self.min_layout = QVBoxLayout()
+
+        self.min_layout.addWidget(self.text_min_angle)
+        self.min_layout.addWidget(self.min_angle)
+
+        self.max_angle = QDoubleSpinBox(self)
+        self.max_angle.setMinimum(0)
+        self.max_angle.setMaximum(180)
+        self.max_angle.setSingleStep(0.1)
+        self.max_layout = QVBoxLayout()
+        self.text_max_angle = QLabel(self, text = 'Max angle')
+
+        self.max_layout.addWidget(self.text_max_angle)
+        self.max_layout.addWidget(self.max_angle)
+
+        self.sample = QDoubleSpinBox(self)
+        self.sample.setMinimum(1)
+        self.sample.setMaximum(180)
+        self.sample.setSingleStep(1)
+        self.text_sample = QLabel(self, text = 'Samples')
+        self.sample_layout = QVBoxLayout()
+
+        self.sample_layout.addWidget(self.text_sample)
+        self.sample_layout.addWidget(self.sample)
+
+        self.min_angle.valueChanged.connect(self.adapt_max)
+        self.max_angle.valueChanged.connect(self.adapt_min)
+
+        self.main_layout.addLayout(self.min_layout)
+        self.main_layout.addLayout(self.max_layout)
+        self.main_layout.addLayout(self.sample_layout)
+
+    def adapt_min(self, new_max):
+        self.min_angle.setMaximum(new_max)
+
+    def adapt_max(self, new_min):
+        self.max_angle.setMinimum(new_min)
+
+    def apply(self, img):
+        if len(np.shape(img)) not in [2, 3]:
+            print("Invalid image shape")
+            return img
+
+        if len(img.shape) == 2:
+            img = img.reshape(*img.shape, 1)
+
+        minval = self.min_angle.value()
+        sample = self.sample.value()
+        maxval = self.max_angle.value()
+
+        res = []
+
+        for dim in range(img.shape[2]):
+            _img = img[:, :, dim]
+            _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(float)
+            res.append(radon(_img, theta = np.linspace(minval, maxval, int(sample))))
+            res[-1] = res[-1].reshape(*res[-1].shape, 1)
+
+        res = np.concatenate(tuple(res), axis = -1).astype(float)
+        if res.shape[2] == 1:
+            res = res.reshape(*res.shape[:2])
+        return (res - res.min()) / abs(res - res.min()).max()
+
+class RadonInverse(Filter):
+    def __init__(self, *args, **kwargs):
+        super().__init__('Radon inverse', *args, **kwargs)
+
+        self.main_layout = QHBoxLayout(self)
+
+        self.min_angle   = QDoubleSpinBox(self)
+        self.min_angle.setMinimum(0)
+        self.min_angle.setMaximum(180)
+        self.min_angle.setSingleStep(0.1)
+        self.text_min_angle = QLabel(self, text = 'Min angle')
+        self.min_layout = QVBoxLayout()
+
+        self.min_layout.addWidget(self.text_min_angle)
+        self.min_layout.addWidget(self.min_angle)
+
+        self.max_angle = QDoubleSpinBox(self)
+        self.max_angle.setMinimum(0)
+        self.max_angle.setMaximum(180)
+        self.max_angle.setSingleStep(0.1)
+        self.max_layout = QVBoxLayout()
+        self.text_max_angle = QLabel(self, text = 'Max angle')
+
+        self.max_layout.addWidget(self.text_max_angle)
+        self.max_layout.addWidget(self.max_angle)
+
+        self.min_angle.valueChanged.connect(self.adapt_max)
+        self.max_angle.valueChanged.connect(self.adapt_min)
+
+        self.main_layout.addLayout(self.min_layout)
+        self.main_layout.addLayout(self.max_layout)
+
+    def adapt_min(self):
+        self.min_angle.setMaximum(self.max_angle.value())
+
+    def adapt_max(self):
+        self.max_angle.setMinimum(self.min_angle.value())
+
+    def apply(self, img):
+        if len(np.shape(img)) not in [2, 3]:
+            print("Invalid image shape")
+            return img
+
+        if len(img.shape) == 2:
+            img = img.reshape(*img.shape, 1)
+
+        minval = self.min_angle.value()
+        maxval = self.max_angle.value()
+        sample = np.shape(img)[1]
+        res = []
+
+        for dim in range(img.shape[2]):
+            _img = img[:, :, dim]
+            if abs(_img - _img.min()).max():
+                _img = ((_img - _img.min()) / abs(_img - _img.min()).max() * 255).astype(float)
+
+            res.append(iradon(_img, theta = np.linspace(minval, maxval, int(sample))))
+            res[-1] = res[-1].reshape(*res[-1].shape, 1)
+
+        res = np.concatenate(tuple(res), axis = -1).astype(float)
+
+        if res.shape[2] == 1:
+            res = res.reshape(*res.shape[:2])
+
+        return (res - res.min()) / abs(res - res.min()).max()

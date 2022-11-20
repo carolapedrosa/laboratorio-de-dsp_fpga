@@ -82,6 +82,8 @@ class Gui(QWidget):
             RidgeDetection      (self.filter_frame),
             Sharpen             (self.filter_frame),
             BoxBlur             (self.filter_frame),
+            RadonDirect         (self.filter_frame),
+            RadonInverse        (self.filter_frame),
         ]
 
     def setup_widgets(self):
