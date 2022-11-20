@@ -10,7 +10,7 @@ class SyncFifo(Elaboratable, FIFOInterface):
                 depth_bits = log2_int(depth, need_pow2=exact_depth)
                 depth = 1 << depth_bits
             except ValueError:
-                raise ValueError("NovoSyncFIFO only supports depths that are powers of 2; requested "
+                raise ValueError("SyncFIFO only supports depths that are powers of 2; requested "
                                  "exact depth {} is not"
                                  .format(depth)) from None
         else:
